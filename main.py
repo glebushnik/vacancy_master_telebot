@@ -4,22 +4,18 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, CallbackContext
 
-# Включаем логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Состояния для обработки ввода текста после выбора кнопки
 AWAITING_MESSAGE = 1
 
-# Словарь для хранения топиков и их идентификаторов
 TOPICS = {
     "Основной топик": {"message_thread_id": None, "chat_id": "-1002241329040"},
     "Побочный топик": {"message_thread_id": "14", "chat_id": "-1002241329040_14"}
 }
 
-# Токен вашего бота
 BOT_TOKEN = "7440529150:AAGn6-GVJHuZZAucSLXIXS5O1SZmj_kXZ5o"
 
 async def start(update: Update, context: CallbackContext) -> None:
@@ -42,10 +38,8 @@ async def button(update: Update, context: CallbackContext) -> None:
     topic_name = query.data
     context.user_data['selected_topic'] = topic_name  # Сохраняем выбранный топик в данных пользователя
 
-    # Приглашаем пользователя ввести текст сообщения
     await query.message.reply_text(f"Вы выбрали топик '{topic_name}'. Теперь введите текст сообщения:")
 
-    # Устанавливаем состояние ожидания ввода текста
     return AWAITING_MESSAGE
 
 async def message_handler(update: Update, context: CallbackContext) -> None:
@@ -66,7 +60,6 @@ async def message_handler(update: Update, context: CallbackContext) -> None:
     message_thread_id = topic_info["message_thread_id"]
     chat_id = topic_info["chat_id"]
 
-    # Формируем данные для отправки сообщения
     data = {
         "chat_id": chat_id,
         "text": user_message
@@ -75,20 +68,17 @@ async def message_handler(update: Update, context: CallbackContext) -> None:
     if message_thread_id:
         data["message_thread_id"] = message_thread_id
 
-    # Отправляем сообщение через API Telegram
     response = requests.post(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         headers={"Content-Type": "application/json"},
         json=data
     )
 
-    # Проверяем, что сообщение отправлено успешно
     if response.status_code == 200:
         await update.message.reply_text(f"Сообщение отправлено в {topic_name}.")
     else:
         await update.message.reply_text("Произошла ошибка при отправке сообщения.")
 
-    # Сбрасываем состояние ожидания
     del context.user_data['selected_topic']
     return ConversationHandler.END
 
@@ -104,7 +94,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(button))
     application.add_handler(CommandHandler("help", help_command))
 
-    # Добавляем обработчик ввода сообщения
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
     application.run_polling()
