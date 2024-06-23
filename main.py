@@ -21,7 +21,6 @@ AWAITING_RESPONSIBILITY = 7
 AWAITING_REQUIREMENTS = 8
 AWAITING_CONTACTS = 9
 AWAITING_TAGS = 10
-AWAITING_APPROVAL = 11
 
 # Словарь для хранения топиков и их идентификаторов
 TOPICS = {
@@ -31,10 +30,6 @@ TOPICS = {
 
 # Токен вашего бота
 BOT_TOKEN = "7440529150:AAGn6-GVJHuZZAucSLXIXS5O1SZmj_kXZ5o"
-
-# ID пользователя @glebushnik
-REVIEWER_ID = 93281775
- # замените на реальный user_id
 
 async def start(update: Update, context: CallbackContext) -> None:
     """Отправляет сообщение при вводе команды /start."""
@@ -61,7 +56,6 @@ async def button(update: Update, context: CallbackContext) -> None:
                                    "Введите название вакансии-позиции (обязательное поле, например, 'Backend Developer'):")
 
     # Устанавливаем состояние ожидания ввода названия вакансии-позиции
-    context.user_data['current_state'] = AWAITING_POSITION
     return AWAITING_POSITION
 
 async def process_job_posting(update: Update, context: CallbackContext) -> int:
@@ -175,47 +169,20 @@ async def process_job_posting(update: Update, context: CallbackContext) -> int:
         message_text += "<b>Контакты:</b> {}\n".format(context.user_data['contacts'])
         message_text += "<b>Теги поста:</b> {}".format(context.user_data['tags'])
 
-        # Отправляем сообщение на проверку к пользователю @glebushnik
-        keyboard = [
-            [
-                InlineKeyboardButton("Опубликовать", callback_data="approve"),
-                InlineKeyboardButton("Отклонить", callback_data="reject")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await context.bot.send_message(chat_id=REVIEWER_ID, text=message_text, reply_markup=reply_markup, parse_mode="HTML")
+        # Формируем данные для отправки сообщения
+        topic_name = context.user_data['selected_topic']
+        topic_info = TOPICS.get(topic_name)
 
-        # Устанавливаем состояние ожидания одобрения
-        context.user_data['current_state'] = AWAITING_APPROVAL
-        context.user_data['approval_message_text'] = message_text
-        context.user_data['approval_message_id'] = update.message.message_id
-        return AWAITING_APPROVAL
+        if not topic_info:
+            await update.message.reply_text("Произошла ошибка при выборе топика.")
+            return ConversationHandler.END
 
-async def handle_approval(update: Update, context: CallbackContext) -> None:
-    """Обрабатывает одобрение или отклонение сообщения."""
-    query = update.callback_query
-    await query.answer()
+        message_thread_id = topic_info["message_thread_id"]
+        chat_id = topic_info["chat_id"]
 
-    decision = query.data
-    approval_message_text = context.user_data.get('approval_message_text')
-    approval_message_id = context.user_data.get('approval_message_id')
-    original_message_id = approval_message_id
-
-    # Получаем информацию о топике и чате
-    topic_name = context.user_data['selected_topic']
-    topic_info = TOPICS.get(topic_name)
-
-    if not topic_info:
-        await update.message.reply_text("Произошла ошибка при выборе топика.")
-        return ConversationHandler.END
-
-    message_thread_id = topic_info["message_thread_id"]
-    chat_id = topic_info["chat_id"]
-
-    if decision == "approve":
         data = {
             "chat_id": chat_id,
-            "text": approval_message_text,
+            "text": message_text,
             "parse_mode": "HTML"
         }
 
@@ -231,22 +198,14 @@ async def handle_approval(update: Update, context: CallbackContext) -> None:
 
         # Проверяем, что сообщение отправлено успешно
         if response.status_code == 200:
-            await query.message.reply_text(f"Сообщение отправлено в {topic_name}.")
-            await context.bot.send_message(chat_id=original_message_id, text="Ваше сообщение было опубликовано.")
+            await update.message.reply_text(f"Сообщение отправлено в {topic_name}.")
         else:
-            await query.message.reply_text("Произошла ошибка при отправке сообщения.")
-            await context.bot.send_message(chat_id=original_message_id, text="Произошла ошибка при отправке вашего сообщения.")
+            await update.message.reply_text("Произошла ошибка при отправке сообщения.")
 
-    elif decision == "reject":
-        await query.message.reply_text("Сообщение отклонено.")
-        await context.bot.send_message(chat_id=original_message_id, text="Ваше сообщение было отклонено.")
-
-    # Сбрасываем состояние
-    del context.user_data['selected_topic']
-    del context.user_data['current_state']
-    del context.user_data['approval_message_text']
-    del context.user_data['approval_message_id']
-    return ConversationHandler.END
+        # Сбрасываем состояние
+        del context.user_data['selected_topic']
+        del context.user_data['current_state']
+        return ConversationHandler.END
 
 async def help_command(update: Update, context: CallbackContext) -> None:
     """Отправляет сообщение при вводе команды /help."""
@@ -262,7 +221,6 @@ def main() -> None:
 
     # Добавляем обработчик ввода сообщения
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_job_posting))
-    application.add_handler(CallbackQueryHandler(handle_approval))
 
     application.run_polling()
 
