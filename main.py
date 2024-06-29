@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 # Состояния для обработки ввода текста после выбора кнопки
 AWAITING_FIELD = 1
+CONFIRMATION = 2
+EDIT_FIELD = 3
 
 # Словарь для хранения полей вакансии и их обязательности
 FIELDS = {
@@ -39,120 +41,85 @@ FIELDS = {
     "grade": {"label": "Грейд", "required": 0, "example": "Senior"},
     "location": {"label": "Локация", "required": 1, "example": "РФ"},
     "timezone": {"label": "Город и/или часовой пояс", "required": 1, "example": "Москва, +-2 часа"},
+    "subject_area": {"label": "Предметная область", "required": 1, "example": ""},
     "job_format": {"label": "Формат работы", "required": 1, "example": "Гибрид"},
-    "subject_area": {"label": "Предметная область", "required": 0, "example": "финтех, e-commerce, ритейл"},
-    "project_topic": {"label": "Тематика проекта", "required": 1, "example": "Разработка CRM системы"},
-    "salary": {"label": "Зарплата", "required": 0, "example": "350.000₽"},
-    "responsibility": {"label": "Ключевая зона ответственности", "required": 1, "example": "Разработка требований и проектирование интеграций"},
-    "requirements": {"label": "Требования", "required": 1, "example": "Быть на связи 24/7"},
+    "project_group": {"label": "Тематика проекта", "required": 1, "example": ""},
+    "salary": {"label": "Зарплата", "required": 0, "example": "100.000₽"},
+    "responsibilities": {"label": "Ключевая зона ответственности", "required": 1,
+                         "example": "Разработка требований и проектирование интеграций"},
+    "requirements": {"label": "Требования", "required": 1, "example": "Быть онлайн 24/7"},
+    "tasks": {"label": "Рабочие задачи", "required": 0, "example": "Рабочие задачи"},
     "wishes": {"label": "Пожелания", "required": 0, "example": "Знание английского на уровне C1"},
-    "tasks": {"label": "Рабочие задачи", "required": 0, "example": "Таски"},
-    "bonus": {"label": "Бонусы", "required": 0, "example": "Бесплатный мерч"},
-    "contacts": {"label": "Контакты", "required": 1, "example": "@telegramusername Иван Иванов"},
+    "bonus": {"label": "Бонусы", "required": 0, "example": "Мерч"},
+    "contacts": {"label": "Контакты", "required": 1, "example": "@telegramuser Ivan Ivanov, CEO"},
     "tags": {"label": "Теги", "required": 0, "example": "#интеграция, #B2B, #SaaS, #API"}
 }
 
 # Словарь для хранения топиков и их идентификаторов
-TOPICS = {
-    "Основной топик": {"message_thread_id": None, "chat_id": "-1002241329040"},
-    "Побочный топик": {"message_thread_id": "14", "chat_id": "-1002241329040_14"},
+CHANNEL = {
+    "Analystic_job": {"message_thread_id": None, "chat_id": "@analyst1c_job"},
+    "Data_Analysis_job": {"message_thread_id": None, "chat_id": "@data_analysis_jobs"},
+    "Analyst_job_fintech": {"message_thread_id": "76814", "chat_id": "@analyst_job"},
+    "Analyst_job_retail": {"message_thread_id": "81463", "chat_id": "@analyst_job"},
+    "Analyst_job_other": {"message_thread_id": "63901", "chat_id": "@analyst_job"},
+    "Analyst_job_other_countries": {"message_thread_id": "63909", "chat_id": "@analyst_job"},
 }
 
 # Токен вашего бота
 BOT_TOKEN = "7272665628:AAHX2hQdwD2QGChr2IsdSgHvyv99J_YtGnc"
 
+async def start(update: Update, context: CallbackContext) -> int:
+    """Отправляет сообщение при вводе команды /start и сразу начинает анкету."""
+    context.user_data["current_field_index"] = 0
+    context.user_data["selected_subject_areas"] = []
+    return await request_next_field(update, context)
 
-async def start(update: Update, context: CallbackContext) -> None:
-    """Отправляет сообщение при вводе команды /start."""
-    keyboard = [
-        [InlineKeyboardButton(topic_name, callback_data=topic_name)] for topic_name in TOPICS
-    ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(
-        "Выберите топик для отправки сообщения:", reply_markup=reply_markup
-    )
-
-
-async def button(update: Update, context: CallbackContext) -> None:
-    """Обрабатывает нажатие кнопки с выбором топика, категории, грейда, локации или предметной области."""
+async def button(update: Update, context: CallbackContext) -> int:
+    """Обрабатывает нажатие кнопки с выбором категории, грейда, локации или предметной области."""
     query = update.callback_query
     await query.answer()
 
-    if context.user_data.get("current_field_index") is None:
-        # Handle topic selection
-        topic_name = query.data
-        context.user_data["selected_topic"] = topic_name  # Сохраняем выбранный топик в данных пользователя
+    selected_value = query.data
+    current_field = list(FIELDS.keys())[context.user_data["current_field_index"]]
 
-        # Инициализируем индекс текущего поля
-        context.user_data["current_field_index"] = 0
-
-        # Запрашиваем данные для первого поля
-        await request_next_field(update, context)
-
-    else:
-        # Handle category, grade, location, or subject_area selection
-        selected_value = query.data
-        current_field = list(FIELDS.keys())[context.user_data["current_field_index"]]
-
-        if current_field == "category":
-            context.user_data["category"] = selected_value
-        elif current_field == "grade":
-            context.user_data["grade"] = selected_value
-        elif current_field == "location":
-            context.user_data["location"] = selected_value
-        elif current_field == "job_format":
-            context.user_data["job_format"] = selected_value
-        elif current_field == "subject_area":
-            if selected_value == "next":
-                if len(context.user_data.get("subject_area", [])) < 3:
-                    await query.message.reply_text(
-                        "Необходимо выбрать как минимум 3 предметные области. Пожалуйста, выберите еще."
-                    )
-                    return
-
-                # Move to the next field
-                context.user_data["current_field_index"] += 1
-                await request_next_field(update, context)
-                return
-
-            if "subject_area" not in context.user_data:
-                context.user_data["subject_area"] = []
-            if selected_value not in context.user_data["subject_area"]:
-                context.user_data["subject_area"].append(selected_value)
-
-            selected_areas = ", ".join(context.user_data["subject_area"])
-
-            if len(context.user_data["subject_area"]) < 3:
-                keyboard = [
-                    [InlineKeyboardButton(area, callback_data=area)] for area in [
-                        "финтех", "e-commerce", "ритейл", "логистика", "foodtech",
-                        "edtech", "стройтех", "medtech", "госсистемы", "ERP",
-                        "CRM", "traveltech", "авиация", "другая"
-                    ] if area not in context.user_data["subject_area"]
-                ] + [[InlineKeyboardButton("Перейти к следующему пункту", callback_data="next")]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-
-                await query.message.reply_text(
-                    f"Вы выбрали: {selected_areas}. Выберите еще одну область или перейдите к следующему пункту:",
-                    reply_markup=reply_markup
+    if current_field == "category":
+        context.user_data["category"] = selected_value
+    elif current_field == "grade":
+        context.user_data["grade"] = selected_value
+    elif current_field == "location":
+        context.user_data["location"] = selected_value
+    elif current_field == "subject_area":
+        if selected_value == "next":
+            if len(context.user_data["selected_subject_areas"]) == 0:
+                await update.callback_query.message.reply_text(
+                    "Пожалуйста, выберите хотя бы одну предметную область."
                 )
-            else:
-                await query.message.reply_text(
-                    f"Вы выбрали: {selected_areas}. Переход к следующему пункту."
-                )
-                context.user_data["current_field_index"] += 1
-                await request_next_field(update, context)
-                return
-
-        # Move to the next field (if any)
-        if current_field != "subject_area":
+                return AWAITING_FIELD
+            context.user_data["subject_area"] = ", ".join(context.user_data["selected_subject_areas"])
             context.user_data["current_field_index"] += 1
-            await request_next_field(update, context)
+            return await request_next_field(update, context)
+        else:
+            if selected_value not in context.user_data["selected_subject_areas"]:
+                context.user_data["selected_subject_areas"].append(selected_value)
+                selected_subject_areas = ", ".join(context.user_data["selected_subject_areas"])
+                await update.callback_query.message.reply_text(
+                    f"Выбранные предметные области: {selected_subject_areas}"
+                )
+            if len(context.user_data["selected_subject_areas"]) == 3:
+                context.user_data["subject_area"] = ", ".join(context.user_data["selected_subject_areas"])
+                context.user_data["current_field_index"] += 1
+                return await request_next_field(update, context)
+
+    # Переход к следующему полю только если не выбран "subject_area"
+    if current_field != "subject_area":
+        context.user_data["current_field_index"] += 1
+        return await request_next_field(update, context)
+
+    return AWAITING_FIELD
 
 
-async def request_next_field(update: Update, context: CallbackContext) -> None:
+
+async def request_next_field(update: Update, context: CallbackContext) -> int:
     """Запрашивает у пользователя данные для следующего поля."""
     field_index = context.user_data.get("current_field_index", 0)
     field_keys = list(FIELDS.keys())
@@ -163,14 +130,14 @@ async def request_next_field(update: Update, context: CallbackContext) -> None:
 
         if update.message:
             await update.message.reply_text(
-                f"Введите {field_info['label']} (пример: {field_info['example']}):"
+                f"Заполните поле '{field_info['label']}' (Например: {field_info['example']}):"
             )
         elif update.callback_query:
             await update.callback_query.message.reply_text(
-                f"Введите {field_info['label']} (пример: {field_info['example']}):"
+                f"Заполните поле '{field_info['label']}' (Например: {field_info['example']}):"
             )
 
-        # Check if the current field is 'category', 'grade', 'location', or 'subject_area' to show options
+        # Check if the current field is 'category', 'grade', 'location' or 'subject_area' to show options
         if field_key == "category":
             categories = [
                 "аналитик 1С",
@@ -213,9 +180,10 @@ async def request_next_field(update: Update, context: CallbackContext) -> None:
                 )
 
         elif field_key == "location":
-            locations = ["РФ", "Казахстан", "Беларусь", "Не важно", "Другая страна"]
+            locations = ["РФ", "Казахстан", "Беларусь", "Не важно"]
             keyboard = [
-                [InlineKeyboardButton(location, callback_data=location)] for location in locations
+                [InlineKeyboardButton(location, callback_data=location)]
+                for location in locations
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -226,171 +194,129 @@ async def request_next_field(update: Update, context: CallbackContext) -> None:
                     "Выберите локацию:", reply_markup=reply_markup
                 )
 
-        elif field_key == "job_format":
-            formats = ["Удаленно", "Гибрид", "Офис"]
-            keyboard = [
-                [InlineKeyboardButton(job_format, callback_data=job_format)] for job_format in formats
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-
-            if update.message:
-                await update.message.reply_text("Выберите формат работы:", reply_markup=reply_markup)
-            elif update.callback_query:
-                await update.callback_query.message.reply_text(
-                    "Выберите формат работы:", reply_markup=reply_markup
-                )
-
         elif field_key == "subject_area":
             subject_areas = [
                 "финтех",
-                "e-commerce",
-                "ритейл",
-                "логистика",
-                "foodtech",
-                "edtech",
-                "стройтех",
-                "medtech",
-                "госсистемы",
-                "ERP",
-                "CRM",
-                "traveltech",
-                "авиация",
-                "другая",
+                "риск-менеджмент",
+                "дата сайнс/машинное обучение",
+                "дата-инженерия",
+                "маркетинг/CRM",
+                "E-commerce",
+                "биллинговые системы",
+                "мобильная разработка",
+                "геймдев",
+                "WEB",
+                "другое",
+                "Следующий пункт анкеты",
             ]
             keyboard = [
-                [InlineKeyboardButton(area, callback_data=area)] for area in subject_areas
+                [InlineKeyboardButton(area, callback_data=area)]
+                for area in subject_areas
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             if update.message:
                 await update.message.reply_text(
-                    "Выберите предметную область (до 3 вариантов):", reply_markup=reply_markup
+                    "Выберите предметную область (можно выбрать до 3):", reply_markup=reply_markup
                 )
             elif update.callback_query:
                 await update.callback_query.message.reply_text(
-                    "Выберите предметную область (до 3 вариантов):", reply_markup=reply_markup
+                    "Выберите предметную область (можно выбрать до 3):", reply_markup=reply_markup
                 )
 
+        return AWAITING_FIELD
     else:
-        await finalize_post(update, context)
+        vacancy_data = context.user_data
+        category = vacancy_data.get("category", "").lower()
+        subject_area = vacancy_data.get("subject_area", "").lower()
 
+        if category in [
+            "бизнес-аналитик",
+            "аналитик бизнес-процессов",
+            "системный аналитик",
+            "system owner",
+            "проектировщик ИТ-решений",
+        ] and "финтех" in subject_area:
+            channel = CHANNEL["Analyst_job_fintech"]
+        else:
+            channel = CHANNEL["Analyst_job_other"]
 
-async def process_job_posting(update: Update, context: CallbackContext) -> int:
-    """Обрабатывает ввод пользователя по шагам для создания объявления о вакансии."""
-    user_input = update.message.text.strip()
+        message_text = "\n".join([f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])
+        chat_id_without_at = channel['chat_id'].replace("@", "")
+        await update.message.reply_text(
+            f"Ваша анкета:\n\n{message_text}\n\nАнкета отправлена в чат: t.me/{chat_id_without_at}/{channel['message_thread_id']}"
+        )
+
+        # Отправка данных в указанные топики
+        await send_vacancy_data(context)
+        return ConversationHandler.END
+
+async def receive_field_value(update: Update, context: CallbackContext) -> int:
+    """Получает значение поля от пользователя и сохраняет его в контексте."""
     field_index = context.user_data.get("current_field_index", 0)
     field_keys = list(FIELDS.keys())
 
     if field_index < len(field_keys):
         field_key = field_keys[field_index]
-        field_info = FIELDS[field_key]
+        user_input = update.message.text
 
-        if field_key in ["category", "grade", "location", "job_format", "subject_area"]:
-            # Store the selected category, grade, location, or subject_area from the callback data
-            context.user_data[field_key] = user_input
-            context.user_data["current_field_index"] += 1
-            await request_next_field(update, context)
-            return AWAITING_FIELD
-
-        if field_info["required"] == 1 and not user_input:
-            await update.message.reply_text(
-                f"{field_info['label']} не может быть пустым. Пожалуйста, введите еще раз, например, '{field_info['example']}':"
-            )
-            return AWAITING_FIELD
-
+        # Сохраняем значение поля в user_data
         context.user_data[field_key] = user_input
         context.user_data["current_field_index"] += 1
 
-        await request_next_field(update, context)
-        return AWAITING_FIELD
+        return await request_next_field(update, context)
 
     return ConversationHandler.END
 
+async def send_vacancy_data(context: CallbackContext) -> None:
+    """Отправляет данные о вакансии в соответствующие топики на основе логики."""
+    vacancy_data = context.user_data
+    category = vacancy_data.get("category", "").lower()
+    subject_area = vacancy_data.get("subject_area", "").lower()
 
-async def finalize_post(update: Update, context: CallbackContext) -> None:
-    """Формирует и отправляет сообщение в выбранный топик."""
-    message_text = ""
+    if category in [
+        "бизнес-аналитик",
+        "аналитик бизнес-процессов",
+        "системный аналитик",
+        "system owner",
+        "проектировщик ИТ-решений",
+    ] and "финтех" in subject_area:
+        channel = CHANNEL["Analyst_job_fintech"]
+    else:
+        channel = CHANNEL["Analyst_job_other"]
 
-    for field_key, field_info in FIELDS.items():
-        field_value = context.user_data.get(field_key, "")
-        if field_value:
-            if isinstance(field_value, list):
-                field_value = ", ".join(field_value)
-            message_text += f"<b>{field_info['label']}:</b> {field_value}\n"
+    chat_id = channel["chat_id"]
+    message_thread_id = channel["message_thread_id"]
+    message_text = "\n".join([f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])
 
-    # Формируем данные для отправки сообщения
-    topic_name = context.user_data["selected_topic"]
-    topic_info = TOPICS.get(topic_name)
-
-    if not topic_info:
-        await update.message.reply_text("Произошла ошибка при выборе топика.")
-        return
-
-    message_thread_id = topic_info["message_thread_id"]
-    chat_id = topic_info["chat_id"]
-
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
         "chat_id": chat_id,
         "text": message_text,
-        "parse_mode": "HTML",
+        "message_thread_id": message_thread_id
     }
 
-    if message_thread_id:
-        data["message_thread_id"] = message_thread_id
-
-    # Отправляем сообщение через API Telegram
-    response = requests.post(
-        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        headers={"Content-Type": "application/json"},
-        json=data,
-    )
-
-    # Проверяем, что сообщение отправлено успешно
+    response = requests.post(url, data=data)
     if response.status_code == 200:
-        if update.message:
-            await update.message.reply_text(f"Сообщение отправлено в {topic_name}.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text(
-                f"Сообщение отправлено в {topic_name}."
-            )
+        logger.info("Вакансия успешно отправлена в топик.")
     else:
-        if update.message:
-            await update.message.reply_text("Произошла ошибка при отправке сообщения.")
-        elif update.callback_query:
-            await update.callback_query.message.reply_text(
-                "Произошла ошибка при отправке сообщения."
-            )
-
-    # Сбрасываем состояние
-    context.user_data.clear()
-
-
-async def help_command(update: Update, context: CallbackContext) -> None:
-    """Отправляет сообщение при вводе команды /help."""
-    await update.message.reply_text("Используйте /start для начала.")
-
+        logger.error(f"Ошибка при отправке вакансии: {response.text}")
 
 def main() -> None:
     """Запуск бота."""
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button))
-    application.add_handler(CommandHandler("help", help_command))
-
-    # Добавляем обработчик ввода сообщения
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, process_job_posting)],
+        entry_points=[CommandHandler("start", start)],
         states={
-            AWAITING_FIELD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_job_posting)]
+            AWAITING_FIELD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_field_value),
+                             CallbackQueryHandler(button)],
         },
-        fallbacks=[CommandHandler("start", start)],
+        fallbacks=[],
     )
 
     application.add_handler(conv_handler)
-
     application.run_polling()
-
 
 if __name__ == "__main__":
     main()
