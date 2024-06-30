@@ -1,7 +1,7 @@
 import json
 import requests
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Состояния для обработки ввода текста после выбора кнопки
 AWAITING_FIELD = 1
-CONFIRMATION = 2
-EDIT_FIELD = 3
 
 # Словарь для хранения полей вакансии и их обязательности
 FIELDS = {
@@ -138,7 +136,6 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
                 f"Заполните поле '{field_info['label']}' (Например: {field_info['example']}):"
             )
 
-        # Check if the current field is 'category', 'grade', 'location' or 'subject_area' to show options
         if field_key == "category":
             categories = [
                 "аналитик 1С",
@@ -250,6 +247,17 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
 
         # Отправка данных в указанные топики
         await send_vacancy_data(context)
+
+        reply_markup = ReplyKeyboardMarkup(
+            [[KeyboardButton('/start')]],
+            one_time_keyboard=True,
+            resize_keyboard=True
+        )
+
+        await update.message.reply_text(
+            "Нажмите кнопку ниже, чтобы создать новую вакансию",
+            reply_markup=reply_markup
+        )
         return ConversationHandler.END
 
 async def receive_field_value(update: Update, context: CallbackContext) -> int:
