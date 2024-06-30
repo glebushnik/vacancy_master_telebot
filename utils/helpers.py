@@ -17,8 +17,14 @@ db_name = os.getenv("DB_NAME")
 db_collection_name = os.getenv("DB_COLLECTION_NAME")
 
 
+MONGO_HOST = "212.113.121.188"
+MONGO_PORT = "27017"
+MONGO_DB = "vacancy_bot"
+MONGO_USER = "admin"
+MONGO_PASS = "pass"
 
-client = pymongo.MongoClient(db_client_uri)
+uri = "mongodb://{}:{}@{}:{}/{}?authSource=admin".format(MONGO_USER, MONGO_PASS, MONGO_HOST, MONGO_PORT, MONGO_DB)
+client = pymongo.MongoClient(uri)
 db = client[db_name]
 collection = db[db_collection_name]
 
