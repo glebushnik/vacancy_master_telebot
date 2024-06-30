@@ -12,9 +12,15 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["vacancy_bot"]
-collection = db["vacancies"]
+db_client_uri = os.getenv("DB_CLIENT_URI")
+db_name = os.getenv("DB_NAME")
+db_collection_name = os.getenv("DB_COLLECTION_NAME")
+
+
+
+client = pymongo.MongoClient(db_client_uri)
+db = client[db_name]
+collection = db[db_collection_name]
 
 async def request_next_field(update: Update, context: CallbackContext) -> int:
     """Запрашивает у пользователя данные для следующего поля."""
@@ -158,6 +164,7 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
         else:
             message_data = {"description": message_text}
             collection.insert_one(message_data)
+            logger.info("Анкета сохранена.")
 
             await update.message.reply_text(
                 f"Ваша анкета:\n\n{message_text}\n\nАнкета отправлена в чат: t.me/{chat_id_without_at}/{channel['message_thread_id']}"
