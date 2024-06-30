@@ -307,17 +307,36 @@ async def send_vacancy_data(context: CallbackContext) -> None:
     vacancy_data = context.user_data
     category = vacancy_data.get("category", "").lower()
     subject_area = vacancy_data.get("subject_area", "").lower()
+    location = vacancy_data.get("location", "")
 
-    if category in [
+    if category == 'аналитик 1С': channel = CHANNEL["Analystic_job"]
+    elif category in ["BI-аналитик","аналитик данных","продуктовый аналитик"]: channel = CHANNEL["Data_Analysis_job"]
+    elif category in [
         "бизнес-аналитик",
         "аналитик бизнес-процессов",
         "системный аналитик",
         "system owner",
         "проектировщик ИТ-решений",
-    ] and "финтех" in subject_area:
+    ] and "финтех" in subject_area and location == "РФ":
         channel = CHANNEL["Analyst_job_fintech"]
-    else:
+    elif category in [
+        "бизнес-аналитик",
+        "аналитик бизнес-процессов",
+        "системный аналитик",
+        "system owner",
+        "проектировщик ИТ-решений",
+    ] and subject_area in ["e-commerce", "ритейл", "логистика"] and location == "РФ":
+        channel = CHANNEL["Analyst_job_retail"]
+    elif category in [
+        "бизнес-аналитик",
+        "аналитик бизнес-процессов",
+        "системный аналитик",
+        "system owner",
+        "проектировщик ИТ-решений",
+    ] and location == "РФ":
         channel = CHANNEL["Analyst_job_other"]
+    else:
+        channel = CHANNEL["Analyst_job_other_countries"]
 
     chat_id = channel["chat_id"]
     message_text = "\n".join(
