@@ -1,4 +1,4 @@
-import json
+import pymongo
 import requests
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
@@ -11,6 +11,10 @@ from telegram.ext import (
     filters,
     CallbackContext,
 )
+
+client = pymongo.MongoClient("mongodb://localhost:27017/")
+db = client["vacancy_bot"]
+collection = db["vacancies"]
 
 # Включаем логирование
 logging.basicConfig(
@@ -41,7 +45,7 @@ FIELDS = {
     "timezone": {"label": "Город и/или часовой пояс", "required": 1, "example": "Москва, +-2 часа"},
     "subject_area": {"label": "Предметная область", "required": 1, "example": ""},
     "job_format": {"label": "Формат работы", "required": 1, "example": "Гибрид"},
-    "project_group": {"label": "Тематика проекта", "required": 1, "example": ""},
+    "project_group": {"label": "Тематика проекта", "required": 1, "example": "Тематика!"},
     "salary": {"label": "Зарплата", "required": 0, "example": "100.000₽"},
     "responsibilities": {"label": "Ключевая зона ответственности", "required": 1,
                          "example": "Разработка требований и проектирование интеграций"},
@@ -241,24 +245,44 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
 
         message_text = "\n".join([f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])
         chat_id_without_at = channel['chat_id'].replace("@", "")
-        await update.message.reply_text(
-            f"Ваша анкета:\n\n{message_text}\n\nАнкета отправлена в чат: t.me/{chat_id_without_at}/{channel['message_thread_id']}"
-        )
 
-        # Отправка данных в указанные топики
-        await send_vacancy_data(context)
+        existing_message = collection.find_one({"description": message_text})
+        if existing_message:
+            logger.info("Такая вакансия уже существует")
 
-        reply_markup = ReplyKeyboardMarkup(
-            [[KeyboardButton('/start')]],
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
+            reply_markup = ReplyKeyboardMarkup(
+                [[KeyboardButton('/start')]],
+                one_time_keyboard=True,
+                resize_keyboard=True
+            )
 
-        await update.message.reply_text(
-            "Нажмите кнопку ниже, чтобы создать новую вакансию",
-            reply_markup=reply_markup
-        )
-        return ConversationHandler.END
+            await update.message.reply_text(
+                "Такая вакансия уже есть! Нажмите кнопку ниже, чтобы создать новую вакансию.",
+                reply_markup=reply_markup
+            )
+            return ConversationHandler.END
+        else:
+            message_data = {"description": message_text}
+            collection.insert_one(message_data)
+
+            await update.message.reply_text(
+                f"Ваша анкета:\n\n{message_text}\n\nАнкета отправлена в чат: t.me/{chat_id_without_at}/{channel['message_thread_id']}"
+            )
+
+            # Отправка данных в указанные топики
+            await send_vacancy_data(context)
+
+            reply_markup = ReplyKeyboardMarkup(
+                [[KeyboardButton('/start')]],
+                one_time_keyboard=True,
+                resize_keyboard=True
+            )
+
+            await update.message.reply_text(
+                "Нажмите кнопку ниже, чтобы создать новую вакансию",
+                reply_markup=reply_markup
+            )
+            return ConversationHandler.END
 
 async def receive_field_value(update: Update, context: CallbackContext) -> int:
     """Получает значение поля от пользователя и сохраняет его в контексте."""
@@ -276,6 +300,7 @@ async def receive_field_value(update: Update, context: CallbackContext) -> int:
         return await request_next_field(update, context)
 
     return ConversationHandler.END
+
 
 async def send_vacancy_data(context: CallbackContext) -> None:
     """Отправляет данные о вакансии в соответствующие топики на основе логики."""
@@ -295,8 +320,10 @@ async def send_vacancy_data(context: CallbackContext) -> None:
         channel = CHANNEL["Analyst_job_other"]
 
     chat_id = channel["chat_id"]
+    message_text = "\n".join(
+        [f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])
+
     message_thread_id = channel["message_thread_id"]
-    message_text = "\n".join([f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])
 
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = {
