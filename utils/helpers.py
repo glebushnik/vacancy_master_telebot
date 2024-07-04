@@ -2,7 +2,7 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import CallbackContext, ConversationHandler
 from config.fields import FIELDS, AWAITING_FIELD
-from config.channels import CHANNEL
+from utils.logic import routing
 from config.logger import logger
 import requests
 import pymongo
@@ -62,7 +62,6 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
                 [InlineKeyboardButton(category, callback_data=category)]
                 for category in categories
             ]
-
         elif current_field == "grade":
             grades = ["Junior", "Middle", "Senior", "Lead", "-"]
             keyboard = [
@@ -105,7 +104,6 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
                 await update.callback_query.message.reply_text(
                     "Выберите предметную область (можно выбрать до 3):", reply_markup=reply_markup
                 )
-
             return AWAITING_FIELD
         elif current_field == "tags":
             return AWAITING_FIELD
@@ -127,7 +125,7 @@ async def request_next_field(update: Update, context: CallbackContext) -> int:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if update.message:
-            await update.message.reply_text("Это поле не обязательно для заполнения.", reply_markup=reply_markup)
+            await update.message.reply_text("Выберите вариант:", reply_markup=reply_markup)
         elif update.callback_query:
             await update.callback_query.message.reply_text("Выберите вариант:", reply_markup=reply_markup)
 
@@ -159,39 +157,8 @@ async def receive_field_value(update: Update, context: CallbackContext) -> int:
 async def send_vacancy_data(context: CallbackContext, update: Update) -> None:
     """Отправляет данные о вакансии в соответствующие топики на основе логики."""
     vacancy_data = context.user_data
-    category = vacancy_data.get("category", "").lower()
-    subject_area = vacancy_data.get("subject_area", "").lower()
-    location = vacancy_data.get("location", "")
 
-    if category == 'аналитик 1С': channel = CHANNEL["Analystic_job"]
-    elif category in ["BI-аналитик","аналитик данных","продуктовый аналитик"]: channel = CHANNEL["Data_Analysis_job"]
-    elif category in [
-        "бизнес-аналитик",
-        "аналитик бизнес-процессов",
-        "системный аналитик",
-        "system owner",
-        "проектировщик ИТ-решений",
-    ] and "финтех" in subject_area and location == "РФ":
-        channel = CHANNEL["Analyst_job_fintech"]
-    elif category in [
-        "бизнес-аналитик",
-        "аналитик бизнес-процессов",
-        "системный аналитик",
-        "system owner",
-        "проектировщик ИТ-решений",
-    ] and subject_area in ["e-commerce", "ритейл", "логистика"] and location == "РФ":
-        channel = CHANNEL["Analyst_job_retail"]
-    elif category in [
-        "бизнес-аналитик",
-        "аналитик бизнес-процессов",
-        "системный аналитик",
-        "system owner",
-        "проектировщик ИТ-решений",
-    ] and location == "РФ":
-        channel = CHANNEL["Analyst_job_other"]
-    else:
-        channel = CHANNEL["Analyst_job_other_countries"]
-
+    channel = routing(vacancy_data)
     chat_id = channel["chat_id"]
     message_text = "\n".join(
         [f"{FIELDS[key]['label']}: {value}" for key, value in vacancy_data.items() if key in FIELDS])

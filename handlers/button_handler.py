@@ -48,3 +48,13 @@ async def button(update: Update, context: CallbackContext) -> int:
         return await request_next_field(update, context)
 
     return AWAITING_FIELD
+
+async def ignore_text_input(update: Update, context: CallbackContext) -> None:
+    current_field_index = context.user_data.get("current_field_index", 0)
+    current_field = list(FIELDS.keys())[current_field_index]
+
+    # Проверка текущего поля для игнорирования пользовательского ввода
+    if current_field in ["category", "grade", "location", "subject_area"]:
+        await update.message.reply_text(
+            "Пожалуйста, выберите один из предложенных вариантов, используя кнопки ниже."
+        )

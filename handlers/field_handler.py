@@ -6,6 +6,7 @@ from config.fields import FIELDS
 AWAITING_FIELD = 1
 
 async def receive_field_value(update: Update, context: CallbackContext) -> int:
+
     field_index = context.user_data.get("current_field_index", 0)
     field_keys = list(FIELDS.keys())
 
